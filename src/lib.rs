@@ -916,7 +916,6 @@ fn collect_signatures(
 /// - `message`: pointer to message (32 bytes)
 /// - `message_len`: length of message (must be 32)
 /// - `epoch`: signature epoch
-/// - `test_mode`: if true, returns a dummy proof
 /// - `buffer`: output buffer
 /// - `buffer_len`: output buffer size
 /// - `written_len`: number of bytes written (output)
@@ -931,27 +930,12 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
     message: *const u8,
     message_len: usize,
     epoch: u64,
-    test_mode: bool,
     buffer: *mut u8,
     buffer_len: usize,
     written_len: *mut usize,
 ) -> PQSigningError {
     if buffer.is_null() || written_len.is_null() {
         return PQSigningError::InvalidPointer;
-    }
-
-    if test_mode {
-        let required = AGG_SIGNATURE_HEADER_LEN;
-        if buffer_len < required {
-            *written_len = required;
-            return PQSigningError::UnknownError;
-        }
-        let out_slice = slice::from_raw_parts_mut(buffer, buffer_len);
-        out_slice[0] = AGG_SIGNATURE_VERSION;
-        out_slice[1..5].copy_from_slice(&0u32.to_le_bytes());
-        out_slice[5..9].copy_from_slice(&0u32.to_le_bytes());
-        *written_len = required;
-        return PQSigningError::Success;
     }
 
     if pubkeys.is_null() || signatures.is_null() || message.is_null() {
@@ -1009,7 +993,6 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
 /// - `agg_bytes`: pointer to serialized aggregated signature bytes
 /// - `agg_len`: length of aggregated signature bytes
 /// - `epoch`: signature epoch
-/// - `test_mode`: if true, verification is skipped
 ///
 /// # Returns
 /// 1 if signature is valid, 0 if invalid, negative value on error
@@ -1022,12 +1005,7 @@ pub unsafe extern "C" fn pq_verify_aggregated_signatures(
     agg_bytes: *const u8,
     agg_len: usize,
     epoch: u64,
-    test_mode: bool,
 ) -> c_int {
-    if test_mode {
-        return 1;
-    }
-
     if pubkeys.is_null() || message.is_null() || agg_bytes.is_null() {
         return -1;
     }

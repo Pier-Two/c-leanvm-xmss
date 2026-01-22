@@ -60,7 +60,6 @@ int main(void) {
         message,
         sizeof(message),
         10,
-        false,
         agg_buf,
         agg_buf_len,
         &agg_written);
@@ -83,7 +82,6 @@ int main(void) {
             message,
             sizeof(message),
             10,
-            false,
             agg_buf,
             agg_buf_len,
             &agg_written);
@@ -103,8 +101,7 @@ int main(void) {
         sizeof(message),
         agg_buf,
         agg_written,
-        10,
-        false);
+        10);
     if (agg_verify != 1) {
         fprintf(stderr, "pq_verify_aggregated_signatures failed: %d\n", agg_verify);
     } else {

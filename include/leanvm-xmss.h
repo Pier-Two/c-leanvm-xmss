@@ -408,7 +408,6 @@ void pq_xmss_aggregation_setup_verifier(void);
  * - `message`: pointer to message (32 bytes)
  * - `message_len`: length of message (must be 32)
  * - `epoch`: signature epoch
- * - `test_mode`: if true, returns a dummy proof
  * - `buffer`: output buffer
  * - `buffer_len`: output buffer size
  * - `written_len`: number of bytes written (output)
@@ -422,7 +421,6 @@ enum PQSigningError pq_aggregate_signatures(const struct PQSignatureSchemePublic
                                             const uint8_t *message,
                                             uintptr_t message_len,
                                             uint64_t epoch,
-                                            bool test_mode,
                                             uint8_t *buffer,
                                             uintptr_t buffer_len,
                                             uintptr_t *written_len);
@@ -438,7 +436,6 @@ enum PQSigningError pq_aggregate_signatures(const struct PQSignatureSchemePublic
  * - `agg_bytes`: pointer to serialized aggregated signature bytes
  * - `agg_len`: length of aggregated signature bytes
  * - `epoch`: signature epoch
- * - `test_mode`: if true, verification is skipped
  *
  * # Returns
  * 1 if signature is valid, 0 if invalid, negative value on error
@@ -449,5 +446,4 @@ int pq_verify_aggregated_signatures(const struct PQSignatureSchemePublicKey *con
                                     uintptr_t message_len,
                                     const uint8_t *agg_bytes,
                                     uintptr_t agg_len,
-                                    uint64_t epoch,
-                                    bool test_mode);
+                                    uint64_t epoch);

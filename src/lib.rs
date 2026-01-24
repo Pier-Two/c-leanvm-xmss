@@ -5,7 +5,7 @@ use std::slice;
 use leansig::signature::{SignatureScheme, SignatureSchemeSecretKey};
 use leansig::serialization::Serializable;
 use leansig::MESSAGE_LENGTH;
-use p3_field::{PrimeCharacteristicRing, PrimeField32};
+use p3_field::PrimeCharacteristicRing;
 use p3_koala_bear::KoalaBear;
 use ssz::{Decode, Encode};
 

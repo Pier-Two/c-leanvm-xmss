@@ -7,6 +7,7 @@ use leansig::serialization::Serializable;
 use leansig::MESSAGE_LENGTH;
 use p3_field::{PrimeCharacteristicRing, PrimeField32};
 use p3_koala_bear::KoalaBear;
+use ssz::{Decode, Encode};
 
 use rec_aggregation::xmss_aggregate::{
     xmss_aggregate_signatures, xmss_setup_aggregation_program, xmss_verify_aggregated_signatures,
@@ -778,31 +779,14 @@ pub extern "C" fn pq_xmss_aggregation_setup_verifier() {
 }
 
 fn serialize_agg_signature(sig: &Devnet2XmssAggregateSignature) -> Vec<u8> {
-    let proof_len = sig.proof_bytes.len();
-    let randomness_count = sig.encoding_randomness.len();
-    let randomness_len = AGG_RANDOMNESS_LEN;
-
-    let mut out = Vec::with_capacity(
-        AGG_SIGNATURE_HEADER_LEN
-            + proof_len
-            + randomness_count * randomness_len * AGG_SIGNATURE_FIELD_BYTES,
-    );
-
-    out.push(AGG_SIGNATURE_VERSION);
-    out.extend_from_slice(&(proof_len as u32).to_le_bytes());
-    out.extend_from_slice(&(randomness_count as u32).to_le_bytes());
-    out.extend_from_slice(&sig.proof_bytes);
-
-    for randomness in &sig.encoding_randomness {
-        for field in randomness {
-            out.extend_from_slice(&field.as_canonical_u32().to_le_bytes());
-        }
-    }
-
-    out
+    sig.as_ssz_bytes()
 }
 
 fn deserialize_agg_signature(data: &[u8]) -> Result<Devnet2XmssAggregateSignature, PQSigningError> {
+    if let Ok(sig) = Devnet2XmssAggregateSignature::from_ssz_bytes(data) {
+        return Ok(sig);
+    }
+
     if data.len() < AGG_SIGNATURE_HEADER_LEN {
         return Err(PQSigningError::UnknownError);
     }

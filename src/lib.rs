@@ -762,6 +762,43 @@ pub unsafe extern "C" fn pq_signature_deserialize(
     }
 }
 
+/// Deserialize signature from JSON
+///
+/// # Parameters
+/// - `json`: pointer to UTF-8 JSON buffer
+/// - `json_len`: buffer size
+/// - `signature_out`: pointer to write signature (output)
+///
+/// # Returns
+/// Error code
+#[no_mangle]
+pub unsafe extern "C" fn pq_signature_from_json(
+    json: *const u8,
+    json_len: usize,
+    signature_out: *mut *mut PQSignature,
+) -> PQSigningError {
+    if json.is_null() || signature_out.is_null() || json_len == 0 {
+        return PQSigningError::InvalidPointer;
+    }
+
+    let json_slice = slice::from_raw_parts(json, json_len);
+    let json_str = match std::str::from_utf8(json_slice) {
+        Ok(s) => s,
+        Err(_) => return PQSigningError::UnknownError,
+    };
+
+    match serde_json::from_str::<SignatureType>(json_str) {
+        Ok(signature) => {
+            let sig_wrapper = Box::new(PQSignatureInner {
+                inner: Box::new(signature),
+            });
+            *signature_out = Box::into_raw(sig_wrapper) as *mut PQSignature;
+            PQSigningError::Success
+        }
+        Err(_) => PQSigningError::UnknownError,
+    }
+}
+
 // ============================================================================
 // Aggregation functions
 // ============================================================================

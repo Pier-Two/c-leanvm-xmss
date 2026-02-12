@@ -389,6 +389,21 @@ enum PQSigningError pq_signature_deserialize(const uint8_t *buffer,
                                              struct PQSignature **signature_out);
 
 /**
+ * Deserialize signature from JSON
+ *
+ * # Parameters
+ * - `json`: pointer to UTF-8 JSON buffer
+ * - `json_len`: buffer size
+ * - `signature_out`: pointer to write signature (output)
+ *
+ * # Returns
+ * Error code
+ */
+enum PQSigningError pq_signature_from_json(const uint8_t *json,
+                                           uintptr_t json_len,
+                                           struct PQSignature **signature_out);
+
+/**
  * Setup the prover for XMSS aggregation.
  */
 void pq_xmss_aggregation_setup_prover(void);

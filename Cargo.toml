@@ -2,18 +2,18 @@
 name = "leanvm-xmss-c"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.87"
 
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-leansig = { git = "https://github.com/leanEthereum/leansig.git", rev = "73bedc26ed961b110df7ac2e234dc11361a4bf25" }
-rec_aggregation = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "e4474138487eeb1ed7c2e1013674fe80ac9f3165", package = "rec_aggregation" }
-rand = "0.9"
+lean-multisig = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "fd8814045deb0ef8fcad4c9f4b1250ee33f7dd01", package = "lean-multisig" }
+leansig = { git = "https://github.com/leanEthereum/leanSig", branch = "devnet4" }
+leansig_wrapper = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "fd8814045deb0ef8fcad4c9f4b1250ee33f7dd01", package = "leansig_wrapper" }
+rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-p3-field = { git = "https://github.com/TomWambsgans/Plonky3.git", branch = "lean-vm-simple" }
-p3-koala-bear = { git = "https://github.com/TomWambsgans/Plonky3.git", branch = "lean-vm-simple" }
 ssz = { package = "ethereum_ssz", version = "0.10" }
 
 [build-dependencies]

@@ -19,5 +19,7 @@ fn main() {
         .expect("Unable to generate bindings")
         .write_to_file(&output_file);
 
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");
 }

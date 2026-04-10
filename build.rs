@@ -6,8 +6,9 @@ use std::path::PathBuf;
 
 fn main() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-
-    let include_dir = PathBuf::from(&crate_dir).join("include");
+    let include_dir = env::var("LEANVM_XMSS_HEADER_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(&crate_dir).join("include"));
     fs::create_dir_all(&include_dir).expect("Unable to create include directory");
 
     let output_file = include_dir.join("leanvm-xmss.h");
@@ -22,4 +23,5 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-env-changed=LEANVM_XMSS_HEADER_DIR");
 }

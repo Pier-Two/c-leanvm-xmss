@@ -9,7 +9,11 @@ use leansig_wrapper::{LeanSigScheme, MESSAGE_LENGTH, XmssPublicKey, XmssSecretKe
 use ssz::{Decode, Encode};
 
 pub const PUBLIC_KEY_SIZE: usize = 52;
-pub const SIGNATURE_SIZE: usize = 2536;
+#[cfg(feature = "test-config")]
+const ACTIVE_SIGNATURE_SIZE: usize = 424;
+#[cfg(not(feature = "test-config"))]
+const ACTIVE_SIGNATURE_SIZE: usize = 2536;
+const SIGNATURE_SIZE: usize = ACTIVE_SIGNATURE_SIZE;
 
 const DEFAULT_LOG_INV_RATE: usize = 2;
 const LEGACY_SIGNATURE_SIZE: usize = 3112;
@@ -928,6 +932,9 @@ mod tests {
     #[test]
     fn test_exported_devnet4_sizes() {
         assert_eq!(PUBLIC_KEY_SIZE, 52);
+        #[cfg(feature = "test-config")]
+        assert_eq!(SIGNATURE_SIZE, 424);
+        #[cfg(not(feature = "test-config"))]
         assert_eq!(SIGNATURE_SIZE, 2536);
         assert_eq!(pq_get_public_key_size(), PUBLIC_KEY_SIZE);
         assert_eq!(pq_get_signature_size(), SIGNATURE_SIZE);

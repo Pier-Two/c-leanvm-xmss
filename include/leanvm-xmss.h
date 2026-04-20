@@ -5,10 +5,6 @@
 
 #define PUBLIC_KEY_SIZE 52
 
-#define SIGNATURE_SIZE 424
-
-#define SIGNATURE_SIZE 2536
-
 typedef enum PQSigningError {
   Success = 0,
   EncodingAttemptsExceeded = 1,

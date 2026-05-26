@@ -43,6 +43,17 @@ typedef struct PQRawXmssSignature {
   const struct PQSignature *signature;
 } PQRawXmssSignature;
 
+typedef struct PQTypeTwoComponent {
+  const struct PQSignatureSchemePublicKey *const *pubkeys;
+  uintptr_t pubkey_count;
+} PQTypeTwoComponent;
+
+typedef struct PQTypeTwoMessageBinding {
+  const uint8_t *message;
+  uintptr_t message_len;
+  uint64_t epoch;
+} PQTypeTwoMessageBinding;
+
 void pq_secret_key_free(struct PQSignatureSchemeSecretKey *key);
 
 void pq_public_key_free(struct PQSignatureSchemePublicKey *key);
@@ -139,6 +150,7 @@ enum PQSigningError pq_aggregate_signatures(const struct PQSignatureSchemePublic
                                             const uint8_t *message,
                                             uintptr_t message_len,
                                             uint64_t epoch,
+                                            uintptr_t log_inv_rate,
                                             uint8_t *buffer,
                                             uintptr_t buffer_len,
                                             uintptr_t *written_len);
@@ -162,3 +174,28 @@ int pq_verify_aggregated_signatures(const struct PQSignatureSchemePublicKey *con
                                     const uint8_t *agg_bytes,
                                     uintptr_t agg_len,
                                     uint64_t epoch);
+
+enum PQSigningError pq_merge_many_type_1(const struct PQAggregatedSignatureChild *entries,
+                                         uintptr_t entry_count,
+                                         uintptr_t log_inv_rate,
+                                         uint8_t *buffer,
+                                         uintptr_t buffer_len,
+                                         uintptr_t *written_len);
+
+int pq_verify_type_2_with_messages(const struct PQTypeTwoComponent *components,
+                                   uintptr_t component_count,
+                                   const struct PQTypeTwoMessageBinding *bindings,
+                                   uintptr_t binding_count,
+                                   const uint8_t *type2_bytes,
+                                   uintptr_t type2_len);
+
+enum PQSigningError pq_split_type_2_by_message(const struct PQTypeTwoComponent *components,
+                                               uintptr_t component_count,
+                                               const uint8_t *type2_bytes,
+                                               uintptr_t type2_len,
+                                               const uint8_t *message,
+                                               uintptr_t message_len,
+                                               uintptr_t log_inv_rate,
+                                               uint8_t *buffer,
+                                               uintptr_t buffer_len,
+                                               uintptr_t *written_len);

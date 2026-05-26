@@ -8,12 +8,13 @@ rust-version = "1.87"
 crate-type = ["cdylib", "staticlib"]
 
 [features]
-test-config = ["lean-multisig/test-config", "leansig_wrapper/test-config"]
+test-config = ["rec_aggregation/test-config", "leansig_wrapper/test-config"]
 
 [dependencies]
-lean-multisig = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "2eb4b9d983171139af36749f127dd9890c9109e6", package = "lean-multisig" }
+backend = { git = "https://github.com/anshalshukla/leanMultisig", rev = "f33a0775e4f88ec8b23b2cb8282a4472c145fb93" }
 leansig = { git = "https://github.com/leanEthereum/leanSig", branch = "devnet4" }
-leansig_wrapper = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "2eb4b9d983171139af36749f127dd9890c9109e6", package = "leansig_wrapper" }
+leansig_wrapper = { git = "https://github.com/anshalshukla/leanMultisig", rev = "f33a0775e4f88ec8b23b2cb8282a4472c145fb93" }
+rec_aggregation = { git = "https://github.com/anshalshukla/leanMultisig", rev = "f33a0775e4f88ec8b23b2cb8282a4472c145fb93" }
 rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

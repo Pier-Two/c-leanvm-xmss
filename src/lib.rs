@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -11,6 +12,9 @@ use rec_aggregation::{
     verify_type_1, verify_type_2, TypeOneMultiSignature, TypeTwoMultiSignature,
 };
 use ssz::{Decode, Encode};
+
+#[global_allocator]
+static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 pub const PUBLIC_KEY_SIZE: usize = 52;
 #[cfg(feature = "test-config")]
@@ -26,6 +30,10 @@ const LEGACY_SIGNATURE_SIZE: usize = 3112;
 type PublicKeyType = XmssPublicKey;
 type SecretKeyType = XmssSecretKey;
 type SignatureType = XmssSignature;
+
+thread_local! {
+    static LAST_ERROR: RefCell<Option<String>> = RefCell::new(None);
+}
 
 #[repr(C)]
 pub struct PQSignatureSchemeSecretKey {
@@ -141,6 +149,33 @@ fn normalize_signature_bytes(bytes: &[u8]) -> Result<&[u8], PQSigningError> {
     }
 
     Err(PQSigningError::UnknownError)
+}
+
+fn set_last_error(message: impl Into<String>) {
+    LAST_ERROR.with(|last_error| {
+        *last_error.borrow_mut() = Some(message.into());
+    });
+}
+
+fn clear_last_error() {
+    LAST_ERROR.with(|last_error| {
+        *last_error.borrow_mut() = None;
+    });
+}
+
+fn cstring_from_message(message: String) -> CString {
+    let bytes = message
+        .into_bytes()
+        .into_iter()
+        .map(|byte| if byte == 0 { b' ' } else { byte })
+        .collect::<Vec<_>>();
+    CString::new(bytes)
+        .unwrap_or_else(|_| CString::new("leanvm-xmss: error detail unavailable").unwrap())
+}
+
+fn aggregation_error(stage: &str, err: impl std::fmt::Display) -> PQSigningError {
+    set_last_error(format!("leanvm-xmss: {stage} failed: {err}"));
+    PQSigningError::UnknownError
 }
 
 unsafe fn write_bytes_to_buffer(
@@ -404,8 +439,8 @@ unsafe fn aggregate_signatures_impl(
         )
     })) {
         Ok(Ok(aggregated)) => aggregated,
+        Ok(Err(err)) => return aggregation_error("aggregate_type_1", err),
         Err(_) => return PQSigningError::UnknownError,
-        Ok(Err(_)) => return PQSigningError::UnknownError,
     };
 
     write_bytes_to_buffer(
@@ -442,6 +477,14 @@ pub unsafe extern "C" fn pq_string_free(s: *mut c_char) {
     if !s.is_null() {
         let _ = CString::from_raw(s);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn pq_take_last_error_message() -> *mut c_char {
+    LAST_ERROR.with(|last_error| match last_error.borrow_mut().take() {
+        Some(message) => cstring_from_message(message).into_raw(),
+        None => std::ptr::null_mut(),
+    })
 }
 
 #[no_mangle]
@@ -878,10 +921,15 @@ pub unsafe extern "C" fn pq_signature_from_json(
 
 #[no_mangle]
 pub extern "C" fn pq_xmss_aggregation_setup_prover() {
-    let _ = catch_unwind(AssertUnwindSafe(|| {
+    clear_last_error();
+    if catch_unwind(AssertUnwindSafe(|| {
         init_aggregation_bytecode();
         precompute_dft_twiddles::<KoalaBear>(1 << 24);
-    }));
+    }))
+    .is_err()
+    {
+        set_last_error("leanvm-xmss: prover setup failed");
+    }
 }
 
 #[no_mangle]
@@ -902,6 +950,7 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
     buffer_len: usize,
     written_len: *mut usize,
 ) -> PQSigningError {
+    clear_last_error();
     if count == 0 {
         return PQSigningError::UnknownError;
     }
@@ -939,8 +988,8 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
         aggregate_type_1(&children, raw_xmss, message_array, epoch32, log_inv_rate)
     })) {
         Ok(Ok(aggregated)) => aggregated,
+        Ok(Err(err)) => return aggregation_error("aggregate_type_1", err),
         Err(_) => return PQSigningError::UnknownError,
-        Ok(Err(_)) => return PQSigningError::UnknownError,
     };
 
     write_bytes_to_buffer(
@@ -965,6 +1014,7 @@ pub unsafe extern "C" fn pq_aggregate_signatures_recursive(
     buffer_len: usize,
     written_len: *mut usize,
 ) -> PQSigningError {
+    clear_last_error();
     aggregate_signatures_impl(
         children,
         child_count,
@@ -1034,6 +1084,7 @@ pub unsafe extern "C" fn pq_merge_many_type_1(
     buffer_len: usize,
     written_len: *mut usize,
 ) -> PQSigningError {
+    clear_last_error();
     if buffer.is_null() || written_len.is_null() {
         return PQSigningError::InvalidPointer;
     }
@@ -1050,7 +1101,7 @@ pub unsafe extern "C" fn pq_merge_many_type_1(
         merge_many_type_1(type1_entries, log_inv_rate)
     })) {
         Ok(Ok(type2)) => type2,
-        Ok(Err(_)) => return PQSigningError::UnknownError,
+        Ok(Err(err)) => return aggregation_error("merge_many_type_1", err),
         Err(_) => return PQSigningError::UnknownError,
     };
 
@@ -1120,6 +1171,7 @@ pub unsafe extern "C" fn pq_split_type_2_by_message(
     buffer_len: usize,
     written_len: *mut usize,
 ) -> PQSigningError {
+    clear_last_error();
     if components.is_null()
         || type2_bytes.is_null()
         || message.is_null()
@@ -1148,7 +1200,7 @@ pub unsafe extern "C" fn pq_split_type_2_by_message(
         split_type_2_by_msg(type2, message_array, log_inv_rate)
     })) {
         Ok(Ok(type1)) => type1,
-        Ok(Err(_)) => return PQSigningError::UnknownError,
+        Ok(Err(err)) => return aggregation_error("split_type_2_by_msg", err),
         Err(_) => return PQSigningError::UnknownError,
     };
 

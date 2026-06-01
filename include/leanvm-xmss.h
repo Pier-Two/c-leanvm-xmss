@@ -62,6 +62,8 @@ void pq_signature_free(struct PQSignature *signature);
 
 void pq_string_free(char *s);
 
+char *pq_take_last_error_message(void);
+
 struct PQRange pq_get_activation_interval(const struct PQSignatureSchemeSecretKey *key);
 
 struct PQRange pq_get_prepared_interval(const struct PQSignatureSchemeSecretKey *key);

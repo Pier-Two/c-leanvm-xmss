@@ -111,7 +111,7 @@ unsafe fn message_from_ptr(
 }
 
 fn serialized_proof_from_bytes(bytes: &[u8]) -> Result<AggregatedXMSS, PQSigningError> {
-    AggregatedXMSS::deserialize(bytes).ok_or(PQSigningError::UnknownError)
+    AggregatedXMSS::decompress(bytes).ok_or(PQSigningError::UnknownError)
 }
 
 fn normalize_signature_bytes(bytes: &[u8]) -> Result<&[u8], PQSigningError> {
@@ -331,11 +331,12 @@ unsafe fn aggregate_signatures_impl(
     let aggregated = match catch_unwind(AssertUnwindSafe(|| {
         lean_multisig::xmss_aggregate(&child_refs, raw_xmss_inputs, &message_array, epoch32, log_inv_rate)
     })) {
-        Ok((_, aggregated)) => aggregated,
+        Ok(Ok((_, aggregated))) => aggregated,
+        Ok(Err(_)) => return PQSigningError::UnknownError,
         Err(_) => return PQSigningError::UnknownError,
     };
 
-    write_bytes_to_buffer(&aggregated.serialize(), buffer, buffer_len, written_len)
+    write_bytes_to_buffer(&aggregated.compress(), buffer, buffer_len, written_len)
 }
 
 #[no_mangle]
@@ -849,11 +850,12 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
     let aggregated = match catch_unwind(AssertUnwindSafe(|| {
         lean_multisig::xmss_aggregate(&no_children, raw_xmss, &message_array, epoch32, DEFAULT_LOG_INV_RATE)
     })) {
-        Ok((_, aggregated)) => aggregated,
+        Ok(Ok((_, aggregated))) => aggregated,
+        Ok(Err(_)) => return PQSigningError::UnknownError,
         Err(_) => return PQSigningError::UnknownError,
     };
 
-    write_bytes_to_buffer(&aggregated.serialize(), buffer, buffer_len, written_len)
+    write_bytes_to_buffer(&aggregated.compress(), buffer, buffer_len, written_len)
 }
 
 #[no_mangle]

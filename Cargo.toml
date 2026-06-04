@@ -11,9 +11,9 @@ crate-type = ["cdylib", "staticlib"]
 test-config = ["lean-multisig/test-config", "leansig_wrapper/test-config"]
 
 [dependencies]
-lean-multisig = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "2eb4b9d983171139af36749f127dd9890c9109e6", package = "lean-multisig" }
-leansig = { git = "https://github.com/leanEthereum/leanSig", branch = "devnet4" }
-leansig_wrapper = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "2eb4b9d983171139af36749f127dd9890c9109e6", package = "leansig_wrapper" }
+lean-multisig = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "f66d4a974eced803574eb0ea43d812e523c8d7ad", package = "lean-multisig" }
+leansig = { git = "https://github.com/leanEthereum/leanSig" }
+leansig_wrapper = { git = "https://github.com/leanEthereum/leanMultisig.git", rev = "f66d4a974eced803574eb0ea43d812e523c8d7ad", package = "leansig_wrapper" }
 rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

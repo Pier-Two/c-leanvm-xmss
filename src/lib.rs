@@ -3,13 +3,19 @@ use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::slice;
+use std::sync::Mutex;
 
 use backend::{precompute_dft_twiddles, KoalaBear};
 use leansig::signature::{SignatureScheme, SignatureSchemeSecretKey, SigningError};
 use leansig_wrapper::{LeanSigScheme, XmssPublicKey, XmssSecretKey, XmssSignature, MESSAGE_LENGTH};
 use rec_aggregation::{
-    aggregate_type_1, init_aggregation_bytecode, merge_many_type_1, split_type_2_by_msg,
-    verify_type_1, verify_type_2, TypeOneMultiSignature, TypeTwoMultiSignature,
+    aggregate_single_message_signatures as aggregate_type_1, init_aggregation_bytecode,
+    merge_single_message_aggregates as merge_many_type_1,
+    split_multi_message_aggregate_by_message as split_type_2_by_msg,
+    verify_multi_message_aggregate as verify_type_2,
+    verify_single_message_aggregate as verify_type_1,
+    MultiMessageAggregateSignature as TypeTwoMultiSignature,
+    SingleMessageAggregateSignature as TypeOneMultiSignature,
 };
 use ssz::{Decode, Encode};
 
@@ -34,6 +40,8 @@ type SignatureType = XmssSignature;
 thread_local! {
     static LAST_ERROR: RefCell<Option<String>> = RefCell::new(None);
 }
+
+static PROVING_PHASE_LOCK: Mutex<()> = Mutex::new(());
 
 #[repr(C)]
 pub struct PQSignatureSchemeSecretKey {
@@ -176,6 +184,25 @@ fn cstring_from_message(message: String) -> CString {
 fn aggregation_error(stage: &str, err: impl std::fmt::Display) -> PQSigningError {
     set_last_error(format!("leanvm-xmss: {stage} failed: {err}"));
     PQSigningError::UnknownError
+}
+
+fn run_proving_phase_then<T, E, R>(
+    f: impl FnOnce() -> Result<T, E>,
+    after: impl FnOnce(T) -> R,
+) -> Result<Result<R, E>, ()> {
+    let _guard = PROVING_PHASE_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        backend::begin_phase();
+        let result = f();
+        backend::end_phase();
+        result.map(after)
+    }));
+    if result.is_err() {
+        let _ = catch_unwind(AssertUnwindSafe(backend::end_phase));
+    }
+    result.map_err(|_| ())
 }
 
 unsafe fn write_bytes_to_buffer(
@@ -429,26 +456,24 @@ unsafe fn aggregate_signatures_impl(
         Err(err) => return err,
     };
 
-    let aggregated = match catch_unwind(AssertUnwindSafe(|| {
-        aggregate_type_1(
-            &child_inputs,
-            raw_xmss_inputs,
-            message_array,
-            epoch32,
-            log_inv_rate,
-        )
-    })) {
-        Ok(Ok(aggregated)) => aggregated,
+    let aggregated_bytes = match run_proving_phase_then(
+        || {
+            aggregate_type_1(
+                &child_inputs,
+                raw_xmss_inputs,
+                message_array,
+                epoch32,
+                log_inv_rate,
+            )
+        },
+        |aggregated| aggregated.compress_without_pubkeys(),
+    ) {
+        Ok(Ok(aggregated_bytes)) => aggregated_bytes,
         Ok(Err(err)) => return aggregation_error("aggregate_type_1", err),
         Err(_) => return PQSigningError::UnknownError,
     };
 
-    write_bytes_to_buffer(
-        &aggregated.compress_without_pubkeys(),
-        buffer,
-        buffer_len,
-        written_len,
-    )
+    write_bytes_to_buffer(&aggregated_bytes, buffer, buffer_len, written_len)
 }
 
 #[no_mangle]
@@ -923,6 +948,9 @@ pub unsafe extern "C" fn pq_signature_from_json(
 pub extern "C" fn pq_xmss_aggregation_setup_prover() {
     clear_last_error();
     if catch_unwind(AssertUnwindSafe(|| {
+        // Lantern is long-running: the leanVM arena rewinds between phases but keeps
+        // touched pages resident, so recursive aggregation phases can exhaust RSS.
+        backend::parallel::init();
         init_aggregation_bytecode();
         precompute_dft_twiddles::<KoalaBear>(1 << 24);
     }))
@@ -983,21 +1011,19 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
         raw_xmss.push((pubkey, signature));
     }
 
-    let aggregated = match catch_unwind(AssertUnwindSafe(|| {
-        let children: [TypeOneMultiSignature; 0] = [];
-        aggregate_type_1(&children, raw_xmss, message_array, epoch32, log_inv_rate)
-    })) {
-        Ok(Ok(aggregated)) => aggregated,
+    let aggregated_bytes = match run_proving_phase_then(
+        || {
+            let children: [TypeOneMultiSignature; 0] = [];
+            aggregate_type_1(&children, raw_xmss, message_array, epoch32, log_inv_rate)
+        },
+        |aggregated| aggregated.compress_without_pubkeys(),
+    ) {
+        Ok(Ok(aggregated_bytes)) => aggregated_bytes,
         Ok(Err(err)) => return aggregation_error("aggregate_type_1", err),
         Err(_) => return PQSigningError::UnknownError,
     };
 
-    write_bytes_to_buffer(
-        &aggregated.compress_without_pubkeys(),
-        buffer,
-        buffer_len,
-        written_len,
-    )
+    write_bytes_to_buffer(&aggregated_bytes, buffer, buffer_len, written_len)
 }
 
 #[no_mangle]
@@ -1097,20 +1123,16 @@ pub unsafe extern "C" fn pq_merge_many_type_1(
         Err(err) => return err,
     };
 
-    let type2 = match catch_unwind(AssertUnwindSafe(|| {
-        merge_many_type_1(type1_entries, log_inv_rate)
-    })) {
-        Ok(Ok(type2)) => type2,
+    let type2_bytes = match run_proving_phase_then(
+        || merge_many_type_1(type1_entries, log_inv_rate),
+        |type2| type2.compress_without_pubkeys(),
+    ) {
+        Ok(Ok(type2_bytes)) => type2_bytes,
         Ok(Err(err)) => return aggregation_error("merge_many_type_1", err),
         Err(_) => return PQSigningError::UnknownError,
     };
 
-    write_bytes_to_buffer(
-        &type2.compress_without_pubkeys(),
-        buffer,
-        buffer_len,
-        written_len,
-    )
+    write_bytes_to_buffer(&type2_bytes, buffer, buffer_len, written_len)
 }
 
 #[no_mangle]
@@ -1196,20 +1218,16 @@ pub unsafe extern "C" fn pq_split_type_2_by_message(
             None => return PQSigningError::UnknownError,
         };
 
-    let type1 = match catch_unwind(AssertUnwindSafe(|| {
-        split_type_2_by_msg(type2, message_array, log_inv_rate)
-    })) {
-        Ok(Ok(type1)) => type1,
+    let type1_bytes = match run_proving_phase_then(
+        || split_type_2_by_msg(type2, message_array, log_inv_rate),
+        |type1| type1.compress_without_pubkeys(),
+    ) {
+        Ok(Ok(type1_bytes)) => type1_bytes,
         Ok(Err(err)) => return aggregation_error("split_type_2_by_msg", err),
         Err(_) => return PQSigningError::UnknownError,
     };
 
-    write_bytes_to_buffer(
-        &type1.compress_without_pubkeys(),
-        buffer,
-        buffer_len,
-        written_len,
-    )
+    write_bytes_to_buffer(&type1_bytes, buffer, buffer_len, written_len)
 }
 
 #[cfg(test)]

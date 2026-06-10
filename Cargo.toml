@@ -11,10 +11,10 @@ crate-type = ["cdylib", "staticlib"]
 test-config = ["rec_aggregation/test-config", "leansig_wrapper/test-config"]
 
 [dependencies]
-backend = { git = "https://github.com/leanEthereum/leanVM", rev = "8fcbd77958a58666e828315de2d6ce7c93297117" }
+backend = { git = "https://github.com/leanEthereum/leanVM", rev = "3f2116d74bb3a75f447287056715ad1ef627a84e" }
 leansig = { git = "https://github.com/leanEthereum/leanSig", branch = "devnet4" }
-leansig_wrapper = { git = "https://github.com/leanEthereum/leanVM", rev = "8fcbd77958a58666e828315de2d6ce7c93297117" }
-rec_aggregation = { git = "https://github.com/leanEthereum/leanVM", rev = "8fcbd77958a58666e828315de2d6ce7c93297117" }
+leansig_wrapper = { git = "https://github.com/leanEthereum/leanVM", rev = "3f2116d74bb3a75f447287056715ad1ef627a84e" }
+rec_aggregation = { git = "https://github.com/leanEthereum/leanVM", rev = "3f2116d74bb3a75f447287056715ad1ef627a84e" }
 rand = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

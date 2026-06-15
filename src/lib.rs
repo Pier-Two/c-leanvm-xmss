@@ -283,6 +283,7 @@ fn collect_raw_xmss_inputs(
     raw_xmss_count: usize,
     message: &[u8; MESSAGE_LENGTH],
     epoch: u32,
+    verify_inputs: bool,
 ) -> Result<Vec<(PublicKeyType, SignatureType)>, PQSigningError> {
     if raw_xmss_count == 0 {
         return Ok(Vec::new());
@@ -304,7 +305,7 @@ fn collect_raw_xmss_inputs(
         let public_key = (*public_key.inner).clone();
         let signature = (*signature.inner).clone();
 
-        if !LeanSigScheme::verify(&public_key, epoch, message, &signature) {
+        if verify_inputs && !LeanSigScheme::verify(&public_key, epoch, message, &signature) {
             return Err(PQSigningError::UnknownError);
         }
 
@@ -424,6 +425,7 @@ unsafe fn aggregate_signatures_impl(
     buffer: *mut u8,
     buffer_len: usize,
     written_len: *mut usize,
+    verify_inputs: bool,
 ) -> PQSigningError {
     if buffer.is_null() || written_len.is_null() {
         return PQSigningError::InvalidPointer;
@@ -446,11 +448,16 @@ unsafe fn aggregate_signatures_impl(
         Ok(message_array) => message_array,
         Err(err) => return err,
     };
-    let raw_xmss_inputs =
-        match collect_raw_xmss_inputs(raw_xmss, raw_xmss_count, &message_array, epoch32) {
-            Ok(raw_xmss_inputs) => raw_xmss_inputs,
-            Err(err) => return err,
-        };
+    let raw_xmss_inputs = match collect_raw_xmss_inputs(
+        raw_xmss,
+        raw_xmss_count,
+        &message_array,
+        epoch32,
+        verify_inputs,
+    ) {
+        Ok(raw_xmss_inputs) => raw_xmss_inputs,
+        Err(err) => return err,
+    };
     let child_inputs = match collect_child_aggregations(children, child_count) {
         Ok(child_inputs) => child_inputs,
         Err(err) => return err,
@@ -965,8 +972,7 @@ pub extern "C" fn pq_xmss_aggregation_setup_verifier() {
     let _ = catch_unwind(AssertUnwindSafe(init_aggregation_bytecode));
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn pq_aggregate_signatures(
+unsafe fn aggregate_raw_signatures(
     pubkeys: *const *const PQSignatureSchemePublicKey,
     signatures: *const *const PQSignature,
     count: usize,
@@ -977,6 +983,7 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
     buffer: *mut u8,
     buffer_len: usize,
     written_len: *mut usize,
+    verify_inputs: bool,
 ) -> PQSigningError {
     clear_last_error();
     if count == 0 {
@@ -1005,7 +1012,7 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
     };
     let mut raw_xmss = Vec::with_capacity(count);
     for (pubkey, signature) in pubkeys.into_iter().zip(signatures.into_iter()) {
-        if !LeanSigScheme::verify(&pubkey, epoch32, &message_array, &signature) {
+        if verify_inputs && !LeanSigScheme::verify(&pubkey, epoch32, &message_array, &signature) {
             return PQSigningError::UnknownError;
         }
         raw_xmss.push((pubkey, signature));
@@ -1024,6 +1031,62 @@ pub unsafe extern "C" fn pq_aggregate_signatures(
     };
 
     write_bytes_to_buffer(&aggregated_bytes, buffer, buffer_len, written_len)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn pq_aggregate_signatures(
+    pubkeys: *const *const PQSignatureSchemePublicKey,
+    signatures: *const *const PQSignature,
+    count: usize,
+    message: *const u8,
+    message_len: usize,
+    epoch: u64,
+    log_inv_rate: usize,
+    buffer: *mut u8,
+    buffer_len: usize,
+    written_len: *mut usize,
+) -> PQSigningError {
+    aggregate_raw_signatures(
+        pubkeys,
+        signatures,
+        count,
+        message,
+        message_len,
+        epoch,
+        log_inv_rate,
+        buffer,
+        buffer_len,
+        written_len,
+        true,
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn pq_aggregate_signatures_unverified(
+    pubkeys: *const *const PQSignatureSchemePublicKey,
+    signatures: *const *const PQSignature,
+    count: usize,
+    message: *const u8,
+    message_len: usize,
+    epoch: u64,
+    log_inv_rate: usize,
+    buffer: *mut u8,
+    buffer_len: usize,
+    written_len: *mut usize,
+) -> PQSigningError {
+    aggregate_raw_signatures(
+        pubkeys,
+        signatures,
+        count,
+        message,
+        message_len,
+        epoch,
+        log_inv_rate,
+        buffer,
+        buffer_len,
+        written_len,
+        false,
+    )
 }
 
 #[no_mangle]
@@ -1053,6 +1116,38 @@ pub unsafe extern "C" fn pq_aggregate_signatures_recursive(
         buffer,
         buffer_len,
         written_len,
+        true,
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn pq_aggregate_signatures_recursive_unverified(
+    children: *const PQAggregatedSignatureChild,
+    child_count: usize,
+    raw_xmss: *const PQRawXmssSignature,
+    raw_xmss_count: usize,
+    message: *const u8,
+    message_len: usize,
+    epoch: u64,
+    log_inv_rate: usize,
+    buffer: *mut u8,
+    buffer_len: usize,
+    written_len: *mut usize,
+) -> PQSigningError {
+    clear_last_error();
+    aggregate_signatures_impl(
+        children,
+        child_count,
+        raw_xmss,
+        raw_xmss_count,
+        message,
+        message_len,
+        epoch,
+        log_inv_rate,
+        buffer,
+        buffer_len,
+        written_len,
+        false,
     )
 }
 

@@ -157,6 +157,17 @@ enum PQSigningError pq_aggregate_signatures(const struct PQSignatureSchemePublic
                                             uintptr_t buffer_len,
                                             uintptr_t *written_len);
 
+enum PQSigningError pq_aggregate_signatures_unverified(const struct PQSignatureSchemePublicKey *const *pubkeys,
+                                                       const struct PQSignature *const *signatures,
+                                                       uintptr_t count,
+                                                       const uint8_t *message,
+                                                       uintptr_t message_len,
+                                                       uint64_t epoch,
+                                                       uintptr_t log_inv_rate,
+                                                       uint8_t *buffer,
+                                                       uintptr_t buffer_len,
+                                                       uintptr_t *written_len);
+
 enum PQSigningError pq_aggregate_signatures_recursive(const struct PQAggregatedSignatureChild *children,
                                                       uintptr_t child_count,
                                                       const struct PQRawXmssSignature *raw_xmss,
@@ -168,6 +179,18 @@ enum PQSigningError pq_aggregate_signatures_recursive(const struct PQAggregatedS
                                                       uint8_t *buffer,
                                                       uintptr_t buffer_len,
                                                       uintptr_t *written_len);
+
+enum PQSigningError pq_aggregate_signatures_recursive_unverified(const struct PQAggregatedSignatureChild *children,
+                                                                 uintptr_t child_count,
+                                                                 const struct PQRawXmssSignature *raw_xmss,
+                                                                 uintptr_t raw_xmss_count,
+                                                                 const uint8_t *message,
+                                                                 uintptr_t message_len,
+                                                                 uint64_t epoch,
+                                                                 uintptr_t log_inv_rate,
+                                                                 uint8_t *buffer,
+                                                                 uintptr_t buffer_len,
+                                                                 uintptr_t *written_len);
 
 int pq_verify_aggregated_signatures(const struct PQSignatureSchemePublicKey *const *pubkeys,
                                     uintptr_t count,

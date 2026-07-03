@@ -25,3 +25,8 @@ tikv-jemallocator = { version = "0.6", optional = true }
 
 [build-dependencies]
 cbindgen = "0.27"
+
+[profile.multisig-release]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
